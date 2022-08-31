@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 rawDf = pd.read_excel("data.xlsx", usecols="B:L", sheet_name="Sheet4")
+fig, ax = plt.subplots()
+ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
 
 
 def floatHourToTime(fh):
@@ -37,38 +39,42 @@ def getUnloadContDf(container_num):
     return rawDf.loc[rawDf["unloading_container"] == container_num]
 
 
-container_1_df = getUnloadContDf(1).sort_values("enter_time_sec")
-enterTimeData = container_1_df["enter_time_sec"].to_numpy()
-leaveTimeData = container_1_df["leave_time_sec"].to_numpy()
-
 ### Capacity calculation
+def getContainerCapacity(unloadingContainer):
+    containerDf = getUnloadContDf(unloadingContainer).sort_values("enter_time_sec")
+    enterTimeData = containerDf["enter_time_sec"].to_numpy()
+    leaveTimeData = containerDf["leave_time_sec"].to_numpy()
 
-parcelQueue = []  # sorted by earliest leave time
-X = []
-Y = []
-currParcelsInQueue = 0
+    parcelQueue = []  # sorted by earliest leave time
+    X = []
+    Y = []
+    currParcelsInQueue = 0
+    for idx, entryTime in enumerate(enterTimeData):
+        currParcelsInQueue += 1
+        parcelLeaveTime = leaveTimeData[idx]
+        if parcelQueue:
+            if entryTime > parcelQueue[0]:
+                currParcelsInQueue -= 1
+                hour, minute, second = floatHourToTime(entryTime % 1)
+                X.append("{0}:{1}:{2}".format(hour + 8, minute, second))
+                Y.append(currParcelsInQueue)
+                parcelQueue.pop(0)
 
-for idx, entryTime in enumerate(enterTimeData):
-    currParcelsInQueue += 1
-    parcelLeaveTime = leaveTimeData[idx]
-    if parcelQueue:
-        if entryTime > parcelQueue[0]:
-            currParcelsInQueue -= 1
-            hour, minute, second = floatHourToTime(entryTime % 1)
-            X.append("{0}:{1}".format(minute, second))
-            Y.append(currParcelsInQueue)
-            parcelQueue.pop(0)
+            parcelQueue.insert(0, parcelLeaveTime) if parcelLeaveTime < parcelQueue[
+                0
+            ] else parcelQueue.append(parcelLeaveTime)
 
-        parcelQueue.insert(0, parcelLeaveTime) if parcelLeaveTime < parcelQueue[
-            0
-        ] else parcelQueue.append(parcelLeaveTime)
+            parcelQueue.sort()
+        parcelQueue.append(parcelLeaveTime)
 
-        parcelQueue.sort()
-    parcelQueue.append(parcelLeaveTime)
+    ax.plot(X, Y, label="Container: {0}".format(unloadingContainer))
 
-# print(X, Y, currParcelsInQueue)
 
-fig, ax = plt.subplots()
-ax.plot(X, Y)
-ax.xaxis.set_major_locator(ticker.MultipleLocator(7))
+containers = [1, 2, 3, 4, 5]
+for container in containers:
+    getContainerCapacity(container)
+
+plt.ylabel("Parcels in queue")
+plt.xlabel("Time")
+plt.legend()
 plt.show()
